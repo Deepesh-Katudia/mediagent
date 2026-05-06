@@ -62,3 +62,22 @@ def test_diagnose_returns_blended_confidence(agent):
     assert len(result) > 0
     assert "confidence" in result[0]
     assert 0.0 <= result[0]["confidence"] <= 1.0
+
+
+def test_diagnose_ml_prob_nonzero_when_model_loaded(agent):
+    # model.pkl must exist (run ml/train.py first)
+    import os
+    model_path = os.path.join("ml", "model.pkl")
+    if not os.path.exists(model_path):
+        pytest.skip("model.pkl not found — run ml/train.py first")
+    result = agent.diagnose(["fever", "body_aches", "fatigue"])
+    flu = next((r for r in result if r["disease"] == "Flu"), None)
+    assert flu is not None
+    assert flu["ml_prob"] > 0.0
+
+
+def test_diagnose_confidence_higher_with_more_matching_symptoms(agent):
+    result_partial = agent.diagnose(["fever"])
+    result_full = agent.diagnose(["fever", "body_aches", "fatigue", "chills"])
+    if result_partial and result_full:
+        assert result_full[0]["confidence"] >= result_partial[0]["confidence"]
