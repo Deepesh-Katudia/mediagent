@@ -51,6 +51,19 @@ st.markdown("""
     .new-chat-btn > button:hover {
         background-color: #4338ca !important;
     }
+    .delete-btn > button {
+        background-color: transparent !important;
+        color: #ef4444 !important;
+        border: 1px solid #7f1d1d !important;
+        border-radius: 6px !important;
+        padding: 4px 8px !important;
+        font-size: 0.8rem !important;
+        min-height: 0 !important;
+    }
+    .delete-btn > button:hover {
+        background-color: #7f1d1d !important;
+        color: white !important;
+    }
     .main-header {
         font-size: 1.6rem;
         font-weight: 700;
@@ -124,10 +137,23 @@ with st.sidebar:
         st.caption("_Your past sessions will appear here._")
     else:
         for session in st.session_state.sessions:
-            label = f"🗒️ {session['title']}\n{session['timestamp']}"
-            if st.button(label, key=f"sess_{session['id']}", use_container_width=True):
-                st.session_state.viewing = session["id"]
-                st.rerun()
+            col_title, col_del = st.columns([5, 1])
+            with col_title:
+                label = f"🗒️ {session['title']}\n{session['timestamp']}"
+                if st.button(label, key=f"sess_{session['id']}", use_container_width=True):
+                    st.session_state.viewing = session["id"]
+                    st.rerun()
+            with col_del:
+                st.markdown('<div class="delete-btn">', unsafe_allow_html=True)
+                if st.button("🗑️", key=f"del_{session['id']}", help="Delete this session"):
+                    # If currently viewing this session, go back to active chat
+                    if st.session_state.viewing == session["id"]:
+                        st.session_state.viewing = None
+                    st.session_state.sessions = [
+                        s for s in st.session_state.sessions if s["id"] != session["id"]
+                    ]
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
     st.caption("⚠️ Educational demo — not medical advice.")
