@@ -22,5 +22,8 @@ streamlit run ui/app.py
 
 ## Testing
 ```bash
-pytest --cov
+cd mediagent
+pytest
 ```
+
+**Note:** All pytest commands must be run from inside the `mediagent/` directory.
