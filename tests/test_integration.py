@@ -49,3 +49,12 @@ def test_explanation_contains_all_sections(agent):
     assert "Diagnosis" in response
     assert "Treatment Plan" in response
     assert "Drug Safety" in response
+
+
+def test_full_diabetes_pipeline_natural_language(agent):
+    """Regression: 'always thirsty' and 'vision is blurry' must be extracted."""
+    response = agent.process(
+        "I have frequent urination and I am always thirsty and my vision is blurry"
+    )
+    assert agent.state == State.DONE
+    assert "Diabetes" in response or "Type 2" in response
