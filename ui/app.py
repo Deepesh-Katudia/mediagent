@@ -6,6 +6,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import streamlit as st
 from agents.orchestrator import OrchestratorAgent, State
+from dotenv import load_dotenv
+from audio_recorder_streamlit import audio_recorder
+from utils.openai_voice import get_openai_client, run_voice_turn
+load_dotenv()
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -86,6 +90,9 @@ def init_state():
         "sessions": [],          # list of {id, title, messages, timestamp}
         "session_counter": 0,
         "viewing": None,         # None = current chat, else session id
+        "voice_mode": False,
+        "voice_history": [],
+        "openai_client": None,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -156,6 +163,15 @@ with st.sidebar:
                 st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
+    st.markdown("### 🎙️ Voice Consult")
+    new_voice = st.toggle("Enable Voice Mode", value=st.session_state.voice_mode)
+    if new_voice != st.session_state.voice_mode:
+        st.session_state.voice_mode = new_voice
+        st.session_state.voice_history = []
+        st.rerun()
+    if st.session_state.voice_mode:
+        st.caption("🔴 Voice mode active — speak with GPT-4o-mini")
+    st.divider()
     st.caption("⚠️ Educational demo — not medical advice.")
 
 
@@ -201,6 +217,60 @@ if agent.state == State.COLLECTING and not st.session_state.messages:
     with st.chat_message("assistant"):
         st.markdown(greeting)
 
+# ── Voice consultation panel (visible only when voice mode is on) ────────────
+if st.session_state.voice_mode:
+    st.divider()
+    st.markdown("#### 🎙️ Voice Consultation — GPT-4o-mini")
+    st.caption("Separate from the diagnostic flow. Speaks with you as an expert doctor.")
+
+    if st.session_state.openai_client is None:
+        try:
+            st.session_state.openai_client = get_openai_client()
+        except ValueError as e:
+            st.error(f"⚠️ {e}")
+            st.session_state.voice_mode = False
+            st.stop()
+
+    for turn in st.session_state.voice_history:
+        with st.chat_message(turn["role"]):
+            st.markdown(turn["content"])
+
+    col_mic, col_hint = st.columns([1, 6])
+    with col_mic:
+        audio_bytes = audio_recorder(
+            text="",
+            recording_color="#e53935",
+            neutral_color="#4f46e5",
+            icon_name="microphone",
+            icon_size="2x",
+            pause_threshold=2.0,
+            key="voice_recorder",
+        )
+    with col_hint:
+        st.caption("Click mic → speak → click again to stop.")
+
+    if audio_bytes:
+        user_text, reply, mp3 = None, None, None
+        with st.spinner("Transcribing and consulting doctor…"):
+            try:
+                user_text, reply, mp3 = run_voice_turn(
+                    st.session_state.openai_client,
+                    audio_bytes,
+                    st.session_state.voice_history,
+                )
+            except Exception as e:
+                st.error(f"Voice error: {e}")
+                user_text = None
+
+        if user_text:
+            with st.chat_message("user"):
+                st.markdown(f"🎤 *{user_text}*")
+            with st.chat_message("assistant"):
+                st.markdown(reply)
+                st.audio(mp3, format="audio/mp3", autoplay=True)
+            st.rerun()
+    st.divider()
+
 # ── Chat input + thinking animation ──────────────────────────────────────────
 THINKING_FRAMES = [
     "🤔 Analyzing your symptoms…",
@@ -242,4 +312,21 @@ if prompt := st.chat_input("Describe your symptoms…"):
     # Celebration on completion
     if agent.state == State.DONE:
         st.success("✅ Consultation complete! Start a **New Chat** from the sidebar for another session.")
-        st.balloons()
+        st.components.v1.html("""
+<canvas id="cc" style="position:fixed;top:0;left:0;width:100%;height:100%;
+    pointer-events:none;z-index:9999;"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+<script>
+(function(){
+    var c = confetti.create(document.getElementById('cc'), {resize:true,useWorker:true});
+    c({particleCount:120,spread:70,angle:60,origin:{x:0.1,y:0.7},
+       colors:['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8']});
+    c({particleCount:120,spread:70,angle:120,origin:{x:0.9,y:0.7},
+       colors:['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8']});
+    setTimeout(function(){
+        c({particleCount:80,spread:100,origin:{x:0.5,y:0},gravity:1.2,
+           colors:['#ff6b6b','#ffd93d','#6bcb77','#4d96ff']});
+    }, 400);
+})();
+</script>
+""", height=0)
