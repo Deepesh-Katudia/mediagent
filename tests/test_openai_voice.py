@@ -1,6 +1,7 @@
 import os
 import sys
 import pytest
+import openai
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -8,14 +9,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from utils.openai_voice import (
     CHAT_MODEL,
     DOCTOR_SYSTEM_PROMPT,
-    TTS_MODEL,
-    TTS_VOICE,
-    WHISPER_MODEL,
     consult_gpt,
     get_openai_client,
-    run_voice_turn,
-    synthesize_speech,
-    transcribe_audio,
 )
 
 
@@ -38,66 +33,13 @@ def test_get_openai_client_returns_client():
     with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-fake-key"}):
         with patch("utils.openai_voice.load_dotenv"):
             # Act
-            import openai
-
             client = get_openai_client()
             # Assert
             assert isinstance(client, openai.OpenAI)
 
 
 # ---------------------------------------------------------------------------
-# transcribe_audio
-# ---------------------------------------------------------------------------
-
-
-def test_transcribe_audio_calls_whisper():
-    # Arrange
-    mock_client = MagicMock()
-    mock_client.audio.transcriptions.create.return_value = MagicMock(text="hello")
-    audio_bytes = b"fake-audio-data"
-
-    # Act
-    transcribe_audio(mock_client, audio_bytes)
-
-    # Assert
-    call_kwargs = mock_client.audio.transcriptions.create.call_args
-    assert call_kwargs.kwargs.get("model") == WHISPER_MODEL or (
-        call_kwargs.args and call_kwargs.args[0] == WHISPER_MODEL
-    )
-
-
-def test_transcribe_audio_file_name_is_wav():
-    # Arrange
-    mock_client = MagicMock()
-    mock_client.audio.transcriptions.create.return_value = MagicMock(text="hello")
-    audio_bytes = b"fake-audio-data"
-
-    # Act
-    transcribe_audio(mock_client, audio_bytes)
-
-    # Assert: inspect the `file` argument passed to create
-    call_kwargs = mock_client.audio.transcriptions.create.call_args
-    file_obj = call_kwargs.kwargs.get("file") or call_kwargs.args[1]
-    assert file_obj.name == "audio.wav"
-
-
-def test_transcribe_audio_returns_text():
-    # Arrange
-    mock_client = MagicMock()
-    mock_client.audio.transcriptions.create.return_value = MagicMock(
-        text="I have a headache"
-    )
-    audio_bytes = b"fake-audio-data"
-
-    # Act
-    result = transcribe_audio(mock_client, audio_bytes)
-
-    # Assert
-    assert result == "I have a headache"
-
-
-# ---------------------------------------------------------------------------
-# consult_gpt
+# consult_gpt helpers
 # ---------------------------------------------------------------------------
 
 
@@ -108,6 +50,11 @@ def _make_chat_mock(reply_text: str):
     mock_response.choices[0].message.content = reply_text
     mock_client.chat.completions.create.return_value = mock_response
     return mock_client
+
+
+# ---------------------------------------------------------------------------
+# consult_gpt
+# ---------------------------------------------------------------------------
 
 
 def test_consult_gpt_system_prompt_is_first():
@@ -207,112 +154,13 @@ def test_consult_gpt_raises_if_no_choices():
         consult_gpt(mock_client, "I feel sick", history)
 
 
-# ---------------------------------------------------------------------------
-# synthesize_speech
-# ---------------------------------------------------------------------------
-
-
-def test_synthesize_speech_uses_tts1():
+def test_consult_gpt_raises_on_api_error():
     # Arrange
     mock_client = MagicMock()
-    mock_client.audio.speech.create.return_value = MagicMock(read=lambda: b"mp3data")
-
-    # Act
-    synthesize_speech(mock_client, "Take rest.")
-
-    # Assert
-    call_kwargs = mock_client.audio.speech.create.call_args
-    assert call_kwargs.kwargs.get("model") == TTS_MODEL
-    assert call_kwargs.kwargs.get("model") == "tts-1"
-
-
-def test_synthesize_speech_uses_nova_voice():
-    # Arrange
-    mock_client = MagicMock()
-    mock_client.audio.speech.create.return_value = MagicMock(read=lambda: b"mp3data")
-
-    # Act
-    synthesize_speech(mock_client, "Take rest.")
-
-    # Assert
-    call_kwargs = mock_client.audio.speech.create.call_args
-    assert call_kwargs.kwargs.get("voice") == TTS_VOICE
-    assert call_kwargs.kwargs.get("voice") == "nova"
-
-
-def test_synthesize_speech_returns_bytes():
-    # Arrange
-    mock_client = MagicMock()
-    mock_response = MagicMock()
-    mock_response.read.return_value = b"mp3data"
-    mock_client.audio.speech.create.return_value = mock_response
-
-    # Act
-    result = synthesize_speech(mock_client, "Take rest.")
-
-    # Assert
-    assert result == b"mp3data"
-
-
-# ---------------------------------------------------------------------------
-# run_voice_turn
-# ---------------------------------------------------------------------------
-
-
-def test_run_voice_turn_returns_triple():
-    # Arrange
-    mock_client = MagicMock()
-
-    mock_client.audio.transcriptions.create.return_value = MagicMock(
-        text="I have a headache"
+    mock_client.chat.completions.create.side_effect = openai.APIStatusError(
+        "insufficient_quota", response=MagicMock(status_code=429), body={}
     )
 
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = "Take paracetamol."
-    mock_client.chat.completions.create.return_value = mock_response
-
-    mock_speech = MagicMock()
-    mock_speech.read.return_value = b"mp3data"
-    mock_client.audio.speech.create.return_value = mock_speech
-
-    history = []
-
-    # Act
-    result = run_voice_turn(mock_client, b"fake-audio", history)
-
-    # Assert: must be a 3-tuple of (str, str, bytes)
-    assert isinstance(result, tuple)
-    assert len(result) == 3
-    transcript, reply, audio = result
-    assert isinstance(transcript, str)
-    assert isinstance(reply, str)
-    assert isinstance(audio, bytes)
-
-
-def test_run_voice_turn_updates_history():
-    # Arrange
-    mock_client = MagicMock()
-
-    mock_client.audio.transcriptions.create.return_value = MagicMock(
-        text="I have a headache"
-    )
-
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = "Take paracetamol."
-    mock_client.chat.completions.create.return_value = mock_response
-
-    mock_speech = MagicMock()
-    mock_speech.read.return_value = b"mp3data"
-    mock_client.audio.speech.create.return_value = mock_speech
-
-    history = []
-
-    # Act
-    run_voice_turn(mock_client, b"fake-audio", history)
-
-    # Assert: consult_gpt appends one user + one assistant turn
-    assert len(history) == 2
-    assert history[0]["role"] == "user"
-    assert history[1]["role"] == "assistant"
+    # Act / Assert
+    with pytest.raises(openai.APIStatusError):
+        consult_gpt(mock_client, "I have a headache", [])

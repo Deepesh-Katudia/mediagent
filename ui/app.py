@@ -6,9 +6,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import streamlit as st
 from agents.orchestrator import OrchestratorAgent, State
+import json
 from dotenv import load_dotenv
-from audio_recorder_streamlit import audio_recorder
-from utils.openai_voice import get_openai_client, run_voice_turn
+from streamlit_mic_recorder import speech_to_text
+from utils.openai_voice import get_openai_client, consult_gpt
 load_dotenv()
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ with st.sidebar:
         st.session_state.voice_history = []
         st.rerun()
     if st.session_state.voice_mode:
-        st.caption("🔴 Voice mode active — speak with GPT-4o-mini")
+        st.caption("🔴 Voice mode active")
     st.divider()
     st.caption("⚠️ Educational demo — not medical advice.")
 
@@ -220,8 +221,8 @@ if agent.state == State.COLLECTING and not st.session_state.messages:
 # ── Voice consultation panel (visible only when voice mode is on) ────────────
 if st.session_state.voice_mode:
     st.divider()
-    st.markdown("#### 🎙️ Voice Consultation — GPT-4o-mini")
-    st.caption("Separate from the diagnostic flow. Speaks with you as an expert doctor.")
+    st.markdown("#### 🎙️ Voice Consultation")
+    st.caption("Ask the AI doctor anything. Separate from the symptom diagnostic flow.")
 
     if st.session_state.openai_client is None:
         try:
@@ -235,39 +236,45 @@ if st.session_state.voice_mode:
         with st.chat_message(turn["role"]):
             st.markdown(turn["content"])
 
-    col_mic, col_hint = st.columns([1, 6])
-    with col_mic:
-        audio_bytes = audio_recorder(
-            text="",
-            recording_color="#e53935",
-            neutral_color="#4f46e5",
-            icon_name="microphone",
-            icon_size="2x",
-            pause_threshold=2.0,
-            key="voice_recorder",
-        )
-    with col_hint:
-        st.caption("Click mic → speak → click again to stop.")
+    transcript = speech_to_text(
+        language="en",
+        start_prompt="🎤 Click to speak",
+        stop_prompt="⏹ Stop",
+        just_once=True,
+        use_container_width=False,
+        key="voice_stt",
+    )
 
-    if audio_bytes:
-        user_text, reply, mp3 = None, None, None
-        with st.spinner("Transcribing and consulting doctor…"):
+    if transcript:
+        reply = None
+        with st.spinner("Consulting doctor…"):
             try:
-                user_text, reply, mp3 = run_voice_turn(
+                reply = consult_gpt(
                     st.session_state.openai_client,
-                    audio_bytes,
+                    transcript,
                     st.session_state.voice_history,
                 )
             except Exception as e:
-                st.error(f"Voice error: {e}")
-                user_text = None
+                err = str(e)
+                if "429" in err or "insufficient_quota" in err:
+                    st.error(
+                        "⚠️ OpenAI quota exceeded. Please add billing at "
+                        "https://platform.openai.com/settings/billing to use voice consultation."
+                    )
+                else:
+                    st.error(f"Voice error: {e}")
 
-        if user_text:
+        if reply:
             with st.chat_message("user"):
-                st.markdown(f"🎤 *{user_text}*")
+                st.markdown(f"🎤 *{transcript}*")
             with st.chat_message("assistant"):
                 st.markdown(reply)
-                st.audio(mp3, format="audio/mp3", autoplay=True)
+                st.components.v1.html(
+                    f"<script>window.speechSynthesis.cancel();"
+                    f"window.speechSynthesis.speak("
+                    f"new SpeechSynthesisUtterance({json.dumps(reply)}));</script>",
+                    height=0,
+                )
             st.rerun()
     st.divider()
 
