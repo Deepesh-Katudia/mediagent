@@ -1,3 +1,35 @@
+"""
+SymptomCollectionAgent — NLP Symptom Extractor and Follow-up Generator
+=======================================================================
+
+AI Technique: Rule-based Natural Language Processing with synonym mapping
+
+Role in pipeline:
+    The SymptomCollectionAgent is the first specialist invoked by the
+    OrchestratorAgent.  Its responsibility is to parse free-text patient
+    descriptions and convert them into a canonical set of normalised symptom
+    tokens that downstream agents (DiagnosisAgent in particular) can reason
+    over.
+
+    The agent operates in two phases:
+
+    1. **Synonym resolution** — The patient's raw text is scanned for known
+       colloquial phrases (e.g. "heart racing", "feel sick", "stiff neck")
+       and mapped to a controlled medical vocabulary defined in
+       ``SYMPTOM_SYNONYMS``.  Phrases are matched longest-first to avoid
+       shorter tokens incorrectly shadowing multi-word expressions.
+
+    2. **Direct token matching** — Any remaining text is compared against the
+       canonical symptom list imported from
+       ``knowledge.disease_rules.SYMPTOMS`` (both underscore and
+       space-separated forms), capturing symptoms the patient stated in
+       standard terminology.
+
+    If fewer than ``MIN_SYMPTOMS`` unique symptoms have been collected across
+    all turns, the agent generates a contextual follow-up question to elicit
+    additional information before the pipeline may proceed to diagnosis.
+"""
+
 from knowledge.disease_rules import SYMPTOMS
 
 SYMPTOM_SYNONYMS = {
@@ -144,9 +176,51 @@ SYMPTOM_SYNONYMS = {
 
 
 class SymptomCollectionAgent:
+    """NLP agent that extracts and normalises symptoms from patient free text.
+
+    This agent bridges the gap between colloquial patient language and the
+    controlled medical vocabulary used by the knowledge base.  It maintains
+    no per-instance state; all session accumulation is performed by the
+    OrchestratorAgent, which passes the growing symptom list back into this
+    agent for follow-up question generation.
+
+    Class attributes
+    ----------------
+    MIN_SYMPTOMS : int
+        Minimum number of distinct canonical symptoms required before the
+        pipeline is permitted to advance to the diagnosis stage.
+    """
+
     MIN_SYMPTOMS = 2
 
     def extract_symptoms(self, text: str) -> list:
+        """Parse free-text input and return a sorted list of canonical symptom tokens.
+
+        The extraction proceeds in two ordered passes:
+
+        1. **Synonym pass** — Iterates over ``SYMPTOM_SYNONYMS`` entries sorted
+           by descending phrase length so that longer, more specific phrases
+           (e.g. ``"shortness of breath"``) are matched before shorter
+           sub-phrases (e.g. ``"breath"``).  Each matched phrase is consumed
+           from the working copy of the text to prevent double-counting.
+
+        2. **Direct token pass** — Scans the remaining text for canonical
+           symptom identifiers (both underscore form ``"runny_nose"`` and
+           space form ``"runny nose"``) drawn from the knowledge-base symptom
+           registry.
+
+        Parameters
+        ----------
+        text : str
+            Raw patient input string (any case).
+
+        Returns
+        -------
+        list[str]
+            Alphabetically sorted list of unique canonical symptom strings
+            (e.g. ``["fever", "headache", "nausea"]``).  Returns an empty
+            list when ``text`` is falsy.
+        """
         if not text:
             return []
         text_lower = text.lower()
@@ -165,9 +239,39 @@ class SymptomCollectionAgent:
         return sorted(found)
 
     def has_enough_symptoms(self, symptoms: list) -> bool:
+        """Return True when the symptom list meets the minimum threshold for diagnosis.
+
+        Parameters
+        ----------
+        symptoms : list[str]
+            Accumulated canonical symptom list from the current session.
+
+        Returns
+        -------
+        bool
+            ``True`` if ``len(symptoms) >= MIN_SYMPTOMS``, ``False`` otherwise.
+        """
         return len(symptoms) >= self.MIN_SYMPTOMS
 
     def get_followup_question(self, symptoms: list) -> str:
+        """Generate a context-sensitive follow-up question to elicit more symptom detail.
+
+        When no symptoms have been collected yet, returns a generic opening
+        prompt.  When at least one symptom is known, lists them and asks
+        whether the patient has any additional symptoms, giving the user
+        visibility into what has already been captured.
+
+        Parameters
+        ----------
+        symptoms : list[str]
+            Canonical symptoms collected so far in the current session.
+
+        Returns
+        -------
+        str
+            A natural-language follow-up question suitable for direct display
+            in the chat interface.
+        """
         if not symptoms:
             return "Please describe your symptoms. What are you experiencing?"
         listed = ", ".join(symptoms)
