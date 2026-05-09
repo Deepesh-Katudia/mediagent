@@ -1,3 +1,22 @@
+"""
+drug_interactions.py
+====================
+Knowledge base for drug safety checking via Constraint Satisfaction
+(Russell & Norvig, Ch. 5).
+
+This module defines:
+- DISEASE_DRUGS: maps each supported disease to its standard first-line
+  medications. DrugSafetyAgent uses this to assemble a candidate drug list
+  from the top diagnoses returned by DiagnosisAgent.
+- FORBIDDEN_PAIRS: binary constraints representing clinically dangerous
+  drug-drug (or drug-substance) combinations. DrugSafetyAgent enforces
+  these as hard CSP constraints and eliminates any violating medication.
+- DRUG_ALTERNATIVES: fallback substitutions offered to the patient when a
+  preferred drug is removed due to a forbidden-pair violation.
+
+AI technique supported: Constraint Satisfaction Problem (DrugSafetyAgent).
+"""
+
 DISEASE_DRUGS = {
     "Flu": ["Oseltamivir", "Ibuprofen", "Acetaminophen"],
     "Common Cold": ["Decongestants", "Antihistamines", "Acetaminophen"],

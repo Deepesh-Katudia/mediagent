@@ -1,3 +1,20 @@
+"""
+disease_rules.py
+================
+Knowledge base for rule-based diagnosis using First-Order Logic (FOL) and
+forward chaining (Russell & Norvig, Ch. 7-9).
+
+This module defines:
+- SYMPTOMS: the complete vocabulary of observable patient symptoms used as
+  feature columns by the ML classifier and as proposition atoms by the FOL
+  inference engine.
+- DISEASE_RULES: a mapping from disease name to its required (necessary) and
+  supporting (probabilistically associated) symptom sets. DiagnosisAgent
+  applies forward chaining over these rules to confirm or refute a diagnosis.
+
+AI technique supported: First-Order Logic + Forward Chaining (DiagnosisAgent).
+"""
+
 SYMPTOMS = [
     "fever", "cough", "fatigue", "body_aches", "runny_nose", "sore_throat",
     "chest_pain", "shortness_of_breath", "headache", "nausea", "vomiting",
