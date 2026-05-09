@@ -6,10 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import streamlit as st
 from agents.orchestrator import OrchestratorAgent, State
-import json
 from dotenv import load_dotenv
-from streamlit_mic_recorder import speech_to_text
-from utils.openai_voice import get_openai_client, consult_gpt
 load_dotenv()
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -91,9 +88,6 @@ def init_state():
         "sessions": [],          # list of {id, title, messages, timestamp}
         "session_counter": 0,
         "viewing": None,         # None = current chat, else session id
-        "voice_mode": False,
-        "voice_history": [],
-        "openai_client": None,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -164,15 +158,6 @@ with st.sidebar:
                 st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
-    st.markdown("### 🎙️ Voice Consult")
-    new_voice = st.toggle("Enable Voice Mode", value=st.session_state.voice_mode)
-    if new_voice != st.session_state.voice_mode:
-        st.session_state.voice_mode = new_voice
-        st.session_state.voice_history = []
-        st.rerun()
-    if st.session_state.voice_mode:
-        st.caption("🔴 Voice mode active")
-    st.divider()
     st.caption("⚠️ Educational demo — not medical advice.")
 
 
@@ -217,66 +202,6 @@ if agent.state == State.COLLECTING and not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": greeting})
     with st.chat_message("assistant"):
         st.markdown(greeting)
-
-# ── Voice consultation panel (visible only when voice mode is on) ────────────
-if st.session_state.voice_mode:
-    st.divider()
-    st.markdown("#### 🎙️ Voice Consultation")
-    st.caption("Ask the AI doctor anything. Separate from the symptom diagnostic flow.")
-
-    if st.session_state.openai_client is None:
-        try:
-            st.session_state.openai_client = get_openai_client()
-        except ValueError as e:
-            st.error(f"⚠️ {e}")
-            st.session_state.voice_mode = False
-            st.stop()
-
-    for turn in st.session_state.voice_history:
-        with st.chat_message(turn["role"]):
-            st.markdown(turn["content"])
-
-    transcript = speech_to_text(
-        language="en",
-        start_prompt="🎤 Click to speak",
-        stop_prompt="⏹ Stop",
-        just_once=True,
-        use_container_width=False,
-        key="voice_stt",
-    )
-
-    if transcript:
-        reply = None
-        with st.spinner("Consulting doctor…"):
-            try:
-                reply = consult_gpt(
-                    st.session_state.openai_client,
-                    transcript,
-                    st.session_state.voice_history,
-                )
-            except Exception as e:
-                err = str(e)
-                if "429" in err or "insufficient_quota" in err:
-                    st.error(
-                        "⚠️ OpenAI quota exceeded. Please add billing at "
-                        "https://platform.openai.com/settings/billing to use voice consultation."
-                    )
-                else:
-                    st.error(f"Voice error: {e}")
-
-        if reply:
-            with st.chat_message("user"):
-                st.markdown(f"🎤 *{transcript}*")
-            with st.chat_message("assistant"):
-                st.markdown(reply)
-                st.components.v1.html(
-                    f"<script>window.speechSynthesis.cancel();"
-                    f"window.speechSynthesis.speak("
-                    f"new SpeechSynthesisUtterance({json.dumps(reply)}));</script>",
-                    height=0,
-                )
-            st.rerun()
-    st.divider()
 
 # ── Chat input + thinking animation ──────────────────────────────────────────
 THINKING_FRAMES = [
