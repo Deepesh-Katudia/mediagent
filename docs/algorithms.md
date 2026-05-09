@@ -1,5 +1,7 @@
 # MediAgent — Algorithm Reference
 
+**Team Members**: Deepesh Katudia, Aditya Srivastava, Manas Mankar, Vishnu Sai Reddy Alla, Bella Gerken.
+
 This document provides a detailed description of each AI technique used in the MediAgent system, including its theoretical basis, concrete implementation details, and the role it plays in the diagnostic pipeline.
 
 All algorithm references use the notation of Russell & Norvig, *Artificial Intelligence: A Modern Approach* (4th ed.).

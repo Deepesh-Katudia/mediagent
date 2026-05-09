@@ -1,5 +1,7 @@
 # MediAgent — System Architecture
 
+**Team Members**: Deepesh Katudia, Aditya Srivastava, Manas Mankar, Vishnu Sai Reddy Alla, Bella Gerken.
+
 ## 1. System Overview
 
 MediAgent is a multi-agent healthcare diagnostic assistant built as an academic demonstration of classical and statistical AI techniques applied to clinical reasoning. The system accepts free-text symptom descriptions from a patient via a Streamlit chat interface, routes the input through a pipeline of six specialised agents, and returns a structured diagnostic report that includes a ranked differential diagnosis, an optimal treatment pathway, a drug safety check, and a plain-English explanation.

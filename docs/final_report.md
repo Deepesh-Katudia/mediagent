@@ -3,7 +3,7 @@
 ## Final Academic Report
 
 **Course:** Artificial Intelligence  
-**Team Members:** Deepesh Katudia, Aditya Srivastava, Manas Mankar, Vishnu, Bella  
+**Team Members**: Deepesh Katudia, Aditya Srivastava, Manas Mankar, Vishnu Sai Reddy Alla, Bella Gerken.
 **Date:** May 2026  
 **Reference Text:** Russell, S., & Norvig, P. (2021). *Artificial Intelligence: A Modern Approach* (4th ed.). Pearson.
 

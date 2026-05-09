@@ -2,6 +2,8 @@
 
 This document describes the complete data flow through the MediAgent system: from raw patient input to the final diagnostic report. It covers the data structures exchanged between agents, a detailed worked example, and the handling of error and edge cases.
 
+**Team Members**: Deepesh Katudia, Aditya Srivastava, Manas Mankar, Vishnu Sai Reddy Alla, Bella Gerken.
+
 ---
 
 ## 1. Step-by-Step Data Flow
